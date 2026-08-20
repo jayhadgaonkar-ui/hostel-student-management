@@ -1,0 +1,23 @@
+.month-card .month-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:12px; }
+.month-card .month-head p { margin-bottom:4px; }
+.month-card .month-head span { font-size:11px; color:#8b9691; }
+.month-head select { border:1px solid #dbe1dc; border-radius:7px; background:#fafbf9; color:#34423c; padding:6px 9px; font-size:11px; font-weight:600; outline:none; }
+.month-legend { display:flex; gap:15px; margin-bottom:11px; color:#77827d; font-size:10px; }
+.month-legend span { display:flex; align-items:center; gap:5px; }
+.month-legend i { width:7px; height:7px; border-radius:50%; }
+.paid-dot { background:#53a866; }
+.pending-dot { background:#dd8f2c; }
+.month-card .months { grid-template-columns:repeat(4,1fr); }
+.month-card .month { min-height:54px; padding:8px 9px; align-items:center; }
+.month-card .month > div { display:grid; gap:2px; }
+.month-card .month strong { font-size:11px; color:#38453f; }
+.month-card .month small { font-size:8px; color:#8d9792; font-weight:500; }
+.month-card .month > span { padding:3px 5px; border-radius:4px; font-size:8px; font-weight:700; }
+.month-card .month.paid > span { background:#d9edda; color:#347245; }
+.month-card .month.pending { background:#fffaf3; border-color:#f0e0c8; }
+.month-card .month.pending > span { background:#ffebce; color:#98601d; }
+
+@media (max-width:700px) {
+  .month-card .months { grid-template-columns:repeat(2,1fr); }
+  .month-card .month-head { align-items:center; }
+}

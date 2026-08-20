@@ -1,0 +1,4 @@
+.file-input.reading { border-color:#4d806f; background:#f2f8f5; }
+.file-input.reading svg { animation:aadhar-pulse 1s ease-in-out infinite; }
+.scan-status { display:block; margin-top:5px; color:#597068; font-size:9px; font-weight:500; font-style:normal; line-height:1.4; }
+@keyframes aadhar-pulse { 50% { opacity:.35; transform:translateY(-1px); } }
