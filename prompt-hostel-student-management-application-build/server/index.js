@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { db, dataDir, uploadDir, studentRows } from './db.js';
+import { supabase } from './supabase.js';
 import { excelPath, generateExcel, syncExcel } from './excel.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -24,7 +25,63 @@ const feeMonths=['January','February','March','April','May','June','July','Augus
 function isOpenFeeMonth(value){const match=String(value).match(/^([A-Za-z]+)\s+(\d{4})$/);if(!match)return false;const month=feeMonths.findIndex(m=>m.toLowerCase()===match[1].toLowerCase());const year=Number(match[2]);return month>=0&&(year>2026||(year===2026&&month>=6));}
 function feeMonthKey(value){const match=String(value).match(/^([A-Za-z]+)\s+(\d{4})$/);if(!match)return '';const index=feeMonths.findIndex(m=>m.toLowerCase()===match[1].toLowerCase());return index<0?'':`${match[2]}-${String(index+1).padStart(2,'0')}`;}
 
-app.get('/api/dashboard', (_, res) => { const students=studentRows(); const fees=db.prepare('SELECT COALESCE(SUM(total_fees),0) n FROM students').get().n; const paid=db.prepare('SELECT COALESCE(SUM(amount),0) n FROM payments').get().n; res.json({students,stats:{students:students.length,total_fees:fees,total_paid:paid,pending:Math.max(fees-paid,0)}}); });
+app.get('/api/dashboard', async (_, res, next) => {
+  try {
+    const { data: studentsData, error: studentsError } = await supabase
+      .from('students')
+      .select('*')
+      .order('full_name', { ascending: true });
+
+    if (studentsError) throw studentsError;
+
+    const { data: payments, error: paymentsError } = await supabase
+      .from('payments')
+      .select('student_id, amount');
+
+    if (paymentsError) throw paymentsError;
+
+    const paymentTotals = {};
+
+    for (const payment of payments) {
+      const id = String(payment.student_id);
+      paymentTotals[id] =
+        (paymentTotals[id] || 0) + Number(payment.amount || 0);
+    }
+
+    const students = studentsData.map(student => {
+      const totalPaid = paymentTotals[String(student.id)] || 0;
+      const totalFees = Number(student.total_fees || 0);
+
+      return {
+        ...student,
+        total_paid: totalPaid,
+        pending_amount: Math.max(totalFees - totalPaid, 0)
+      };
+    });
+
+    const totalFees = students.reduce(
+      (sum, student) => sum + Number(student.total_fees || 0),
+      0
+    );
+
+    const totalPaid = payments.reduce(
+      (sum, payment) => sum + Number(payment.amount || 0),
+      0
+    );
+
+    res.json({
+      students,
+      stats: {
+        students: students.length,
+        total_fees: totalFees,
+        total_paid: totalPaid,
+        pending: Math.max(totalFees - totalPaid, 0)
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 app.post('/api/aadhar/extract', extractUpload.single('aadhar_pdf'), async(req,res,next)=>{if(!req.file)return res.status(400).json({error:'Choose an Aadhar document first'});const id=crypto.randomUUID();const tempPath=path.join(dataDir,`extract-${id}${aadharTypes.get(req.file.mimetype)}`);const normalizedPath=path.join(dataDir,`extract-${id}-ocr.png`);const textPath=path.join(dataDir,`extract-${id}.txt`);try{fs.writeFileSync(tempPath,req.file.buffer);const python=process.env.PYTHON_PATH||(fs.existsSync(bundledPython)?bundledPython:'python');let parsePath=tempPath;if(req.file.mimetype!=='application/pdf'){await runFile(python,[path.join(root,'server','prepare_aadhar_image.py'),tempPath,normalizedPath],{timeout:20000,maxBuffer:1024*1024});const {stdout:ocrText}=await runFile('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-File',path.join(root,'server','ocr_image.ps1'),'-ImagePath',normalizedPath],{timeout:30000,maxBuffer:2*1024*1024});fs.writeFileSync(textPath,ocrText,'utf8');parsePath=textPath;}const {stdout}=await runFile(python,[path.join(root,'server','extract_aadhar.py'),parsePath],{timeout:20000,maxBuffer:1024*1024});const result=JSON.parse(stdout);res.json(result);}catch(e){let message='Could not read this document. Try a clearer, upright image or enter the details manually.';try{const parsed=JSON.parse(e.stdout||'{}');if(parsed.error)message=parsed.error;}catch{}res.status(422).json({error:message});}finally{[tempPath,normalizedPath,textPath].forEach(file=>fs.rmSync(file,{force:true}));}});
 app.get('/api/students/:id', (req,res) => { const student=db.prepare('SELECT s.*,COALESCE(SUM(p.amount),0) total_paid FROM students s LEFT JOIN payments p ON p.student_id=s.id WHERE s.id=? GROUP BY s.id').get(req.params.id); if(!student)return res.status(404).json({error:'Student not found'}); student.pending_amount=Math.max(student.total_fees-student.total_paid,0); student.payments=db.prepare('SELECT * FROM payments WHERE student_id=? ORDER BY payment_date DESC,id DESC').all(req.params.id); res.json(student); });
 app.post('/api/students', upload.single('aadhar_pdf'), (req,res,next) => { try { const errors=validate(req.body); if(Object.keys(errors).length){if(req.file)fs.unlinkSync(req.file.path);return res.status(400).json({errors});} const r=db.prepare('INSERT INTO students(full_name,class_year,mobile,address,aadhar_number,admission_date,aadhar_file,total_fees,security_deposit,deposit_status,deposit_received_date,deposit_refunded_date) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').run(req.body.full_name.trim(),req.body.class_year.trim(),req.body.mobile,req.body.address.trim(),req.body.aadhar_number,req.body.admission_date,req.file?.filename||null,Number(req.body.total_fees),Number(req.body.security_deposit||0),req.body.deposit_status||'Pending',req.body.deposit_received_date||null,req.body.deposit_refunded_date||null); syncExcel(); res.status(201).json({id:r.lastInsertRowid}); } catch(e){next(e);} });

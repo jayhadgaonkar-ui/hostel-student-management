@@ -11,8 +11,10 @@
     "test": "node --test server/*.test.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
     "better-sqlite3": "^12.2.0",
     "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
     "exceljs": "^4.4.0",
     "express": "^5.1.0",
     "lucide-react": "^0.468.0",
