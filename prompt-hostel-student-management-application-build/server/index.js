@@ -92,5 +92,14 @@ app.delete('/api/payments/:id', (req,res) => { const r=db.prepare('DELETE FROM p
 app.get('/api/export', async(_,res,next)=>{try{await generateExcel();res.download(excelPath,'hostel-master.xlsx');}catch(e){next(e);}});
 app.use((e,req,res,next)=>{console.error(e);if(e.code==='SQLITE_CONSTRAINT_UNIQUE')return res.status(409).json({error:'This Aadhar number is already registered'});res.status(e.status||400).json({error:e.message||'Something went wrong'});});
 if(fs.existsSync(path.join(root,'dist'))){app.use(express.static(path.join(root,'dist')));app.get('/{*splat}',(req,res)=>res.sendFile(path.join(root,'dist','index.html')));}
-const port=process.env.PORT||4000; if(process.env.NODE_ENV!=='test')app.listen(port,()=>{syncExcel();console.log(`SWAMI running at http://localhost:${port}`);});
-export default app;
+const port = process.env.PORT || 4000;
+
+if (
+  process.env.NODE_ENV !== 'test' &&
+  !process.env.VERCEL
+) {
+  app.listen(port, () => {
+    syncExcel();
+    console.log(`SWAMI running at http://localhost:${port}`);
+  });
+}export default app;
