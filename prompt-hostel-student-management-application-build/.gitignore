@@ -1,12 +1,48 @@
-node_modules/
-dist/
+# Environment files (the empty template remains tracked)
+.env
+.env.*
+!.env.example
+
+# Runtime data and uploaded documents
+work/
 data/*
 !data/.gitkeep
 uploads/*
 !uploads/.gitkeep
-work/
-outputs/
-.env
+
+# Dependencies and deployment output
+node_modules/
+dist/
 .vercel/
+
+# Generated reports and other build artifacts
+*.xlsx
+*.xls
+outputs/
+
+# Logs
+*.log
+*.log.*
+logs/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Caches and temporary files
+.cache/
+.npm/
+.pnpm-store/
+.vite/
+coverage/
+tmp/
+temp/
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Operating-system metadata
 .DS_Store
 Thumbs.db
