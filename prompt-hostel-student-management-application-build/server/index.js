@@ -10,6 +10,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { supabase } from './supabase.js';
+import { createOwnerAuth } from './auth.js';
 
 const root = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -38,8 +39,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
+
+const ownerAuth = createOwnerAuth({
+  authClient: supabase.auth,
+  ownerUserId: process.env.OWNER_USER_ID
+});
+
+app.use('/api', ownerAuth);
+
 if (!isVercel) {
-  app.use('/uploads', express.static(uploadDir));
+  app.use('/uploads', ownerAuth, express.static(uploadDir));
 }
 
 /* =========================================================

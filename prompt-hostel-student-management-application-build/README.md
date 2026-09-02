@@ -129,7 +129,7 @@ Automatic Aadhar extraction supports readable PDFs and clear JPG, JPEG, PNG, and
 
 This application stores sensitive identity information. Run it only on a trusted computer or private network, restrict filesystem access, maintain encrypted backups, and follow applicable Indian privacy and retention requirements.
 
-Authentication is intentionally not included. Add access control before making the application available on the public internet.
+Access is restricted to the configured owner through Supabase email/password authentication. Public registration must remain disabled; see [the deployment guide](docs/DEPLOYMENT.md#phase-2-single-owner-authentication).
 
 ## License
 
