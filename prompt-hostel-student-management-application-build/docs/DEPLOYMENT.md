@@ -58,3 +58,24 @@ For a real hosted version:
 3. Replace local uploads with hosted object storage.
 4. Convert Express routes to Vercel serverless API routes or host the Express backend on Render, Railway, Fly.io, or a VPS.
 5. Deploy the frontend on Vercel.
+
+## Phase 2: single-owner authentication
+
+The dashboard and every data API require a verified Supabase email/password session whose user UUID exactly matches `OWNER_USER_ID`. There is no registration UI. Keep public sign-up disabled in Supabase.
+
+### Create the owner
+
+1. In the Supabase project, open **Authentication → Users**.
+2. Select **Add user → Create new user**, enter the owner's email and a strong password, and mark the email confirmed if appropriate. Do not put the password in this repository or Vercel.
+3. Copy the new user's UUID from the Users table (not the email) into the server variable `OWNER_USER_ID`.
+4. Open **Authentication → Providers → Email** and disable **Allow new users to sign up**. Keep email/password sign-in enabled.
+
+### Local variables
+
+Copy `.env.example` to `.env` and fill it locally. The browser variables are `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Server configuration is `SUPABASE_URL`; server-only secrets are `SUPABASE_SERVICE_ROLE_KEY`, `OWNER_USER_ID`, `AADHAAR_HMAC_SECRET`, and `AADHAAR_ENCRYPTION_KEY`. Never prefix a server secret with `VITE_` and never commit `.env`.
+
+### Vercel variables
+
+In **Project Settings → Environment Variables**, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for the Vite build. Add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `OWNER_USER_ID`, `AADHAAR_HMAC_SECRET`, and `AADHAAR_ENCRYPTION_KEY` for server functions. Select the intended Preview/Production environments, save, and redeploy. Values must come from the matching Supabase project; do not expose or log them.
+
+The anon key and URL are public browser configuration. The service-role key, owner UUID, and Aadhaar secrets are server-only. Authentication protects application access but does not replace the future RLS, storage, Aadhaar cryptography, or rate-limiting phases.
