@@ -10,7 +10,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { supabase } from './supabase.js';
-import { createOwnerAuth } from './auth.js';
+import { createOwnerAuth, ownerSession } from './auth.js';
 
 const root = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -47,6 +47,10 @@ const ownerAuth = createOwnerAuth({
 });
 
 app.use('/api', ownerAuth);
+
+// This route is intentionally registered after ownerAuth. It confirms only
+// that the server accepted the session and discloses no identity information.
+app.get('/api/auth/session', ownerSession);
 
 if (!isVercel) {
   app.use('/uploads', ownerAuth, express.static(uploadDir));
@@ -253,7 +257,7 @@ app.get(
         error: studentsError
       } = await supabase
         .from('students')
-        .select('*')
+        .select('id, full_name, class_year, total_fees')
         .order('full_name', {
           ascending: true
         });

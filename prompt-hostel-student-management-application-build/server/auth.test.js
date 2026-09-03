@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import express from 'express';
-import { createOwnerAuth } from './auth.js';
+import { createOwnerAuth, ownerSession } from './auth.js';
 
 const owner = 'owner-uuid';
 const call = async (config = {}, authorization) => {
@@ -11,6 +11,17 @@ const call = async (config = {}, authorization) => {
   try {
     const headers = authorization ? { Authorization: authorization } : {};
     return await fetch(`http://127.0.0.1:${server.address().port}/api/private`, { headers });
+  } finally { server.close(); }
+};
+
+const callSession = async (config = {}, authorization) => {
+  const app = express();
+  app.use('/api', createOwnerAuth({ authClient: config.getUser && { getUser: config.getUser }, ownerUserId: config.ownerUserId === undefined ? owner : config.ownerUserId }));
+  app.get('/api/auth/session', ownerSession);
+  const server = app.listen(0);
+  try {
+    const headers = authorization ? { Authorization: authorization } : {};
+    return await fetch(`http://127.0.0.1:${server.address().port}/api/auth/session`, { headers });
   } finally { server.close(); }
 };
 
@@ -42,4 +53,23 @@ test('the configured owner is allowed', async () => {
 test('missing authentication configuration fails closed', async () => {
   const response = await call({ getUser: null, ownerUserId: '' }, 'Bearer valid');
   assert.equal(response.status, 401);
+});
+
+test('owner session endpoint rejects missing authentication', async () => {
+  assert.equal((await callSession({ getUser: async () => ({}) })).status, 401);
+});
+
+test('owner session endpoint rejects a valid non-owner', async () => {
+  const response = await callSession({ getUser: async () => ({ data: { user: { id: 'not-owner' } }, error: null }) }, 'Bearer valid');
+  assert.equal(response.status, 403);
+});
+
+test('owner session endpoint returns only the minimal response for the owner', async () => {
+  const response = await callSession({ getUser: async () => ({ data: { user: { id: owner, email: 'owner@example.invalid' } }, error: null }) }, 'Bearer secret-token');
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { authenticated: true });
+});
+
+test('owner session endpoint fails closed when configuration is missing', async () => {
+  assert.equal((await callSession({ getUser: null, ownerUserId: '' }, 'Bearer valid')).status, 401);
 });
