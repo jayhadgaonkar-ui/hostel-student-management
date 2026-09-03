@@ -38,7 +38,7 @@ begin
   loop
     execute format('alter table %I.%I enable row level security', relation.nspname, relation.relname);
     execute format('alter table %I.%I force row level security', relation.nspname, relation.relname);
-    execute format('revoke all privileges on table %I.%I from anon, authenticated', relation.nspname, relation.relname);
+    execute format('revoke all privileges on table %I.%I from public, anon, authenticated', relation.nspname, relation.relname);
 
     -- Protect identity/serial sequences owned by application-table columns.
     for owned_sequence in
@@ -50,7 +50,7 @@ begin
         and dependency.deptype in ('a', 'i')
         and sequence_class.relkind = 'S'
     loop
-      execute format('revoke all privileges on sequence %I.%I from anon, authenticated', owned_sequence.nspname, owned_sequence.relname);
+      execute format('revoke all privileges on sequence %I.%I from public, anon, authenticated', owned_sequence.nspname, owned_sequence.relname);
     end loop;
 
     -- Revoke access to views that directly depend on an application table.
@@ -63,7 +63,7 @@ begin
       where dependency.refobjid = relation.oid
         and view_class.relkind in ('v', 'm')
     loop
-      execute format('revoke all privileges on table %I.%I from anon, authenticated', dependent_view.nspname, dependent_view.relname);
+      execute format('revoke all privileges on table %I.%I from public, anon, authenticated', dependent_view.nspname, dependent_view.relname);
     end loop;
   end loop;
 
@@ -75,9 +75,10 @@ begin
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
+      and p.prokind <> 'p'
   loop
     execute format(
-      'revoke all privileges on function %I.%I(%s) from anon, authenticated',
+      'revoke all privileges on function %I.%I(%s) from public, anon, authenticated',
       public_function.nspname,
       public_function.proname,
       public_function.arguments
@@ -85,5 +86,14 @@ begin
   end loop;
 end
 $migration$;
+
+-- Secure objects subsequently created by the role applying this migration.
+-- PostgreSQL treats views as tables for default-privilege purposes.
+alter default privileges in schema public
+  revoke all privileges on tables from public, anon, authenticated;
+alter default privileges in schema public
+  revoke all privileges on sequences from public, anon, authenticated;
+alter default privileges in schema public
+  revoke all privileges on functions from public, anon, authenticated;
 
 commit;

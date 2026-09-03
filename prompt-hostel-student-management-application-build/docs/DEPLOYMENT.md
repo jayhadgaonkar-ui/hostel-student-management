@@ -70,24 +70,28 @@ must pass through the Express API, which uses the server-only service-role key.
 Repository inspection found four Supabase application tables: `students`,
 `payments`, `archived_students`, and `archived_payments`. No Supabase views,
 RPC functions, or explicitly named sequences are used by the application. The
-migration also revokes access to sequences owned by those tables, views that
-directly depend on them, and any user-defined function in the `public` schema
-if such objects exist in the deployed schema.
+migration also revokes access inherited through `PUBLIC`, including sequences
+owned by those tables, views that directly depend on them, and any user-defined
+function in the `public` schema if such objects exist in the deployed schema.
+Secure default privileges cover future tables/views, sequences, and functions
+created by the role that applies the migration.
 
 ### Mandatory deployment order
 
 1. Merge the reviewed code.
 2. Apply `supabase/migrations/20260903000100_deny_direct_application_data_access.sql` in the Supabase SQL Editor. Run it as a project administrator; do not edit it to add credentials.
 3. Run `supabase/verification/phase_3a_verify_data_api_denied.sql` in the SQL Editor. It reads PostgreSQL metadata only, not student records.
-4. Confirm every required table is present, both RLS columns are `true`, `anon_and_authenticated_privileges_absent` is `true`, and the policy query returns zero rows. Optionally test Data API table requests with anon and ordinary authenticated credentials and confirm they cannot read or write rows; never include record contents in test output.
+4. Confirm every required table is present; both RLS columns are `true`; every table, sequence, view, function, and default-privilege result reports effective browser privileges absent; and the policy query returns zero rows. Effective checks include access inherited through `PUBLIC`. Optionally test Data API table requests with anon and ordinary authenticated credentials and confirm they cannot read or write rows; never include record contents in test output.
 5. Disable public Supabase sign-up.
 6. Create the single owner.
 7. Configure the Vercel environment variables described below.
 8. Redeploy and test missing, expired, non-owner, and owner authentication flows.
 
 The migration is transactional and repeatable. It validates the required
-tables, enables and forces RLS, and revokes browser-role privileges without
-creating policies or changing application rows. Supabase's `service_role` has
+tables, enables and forces RLS, and revokes `PUBLIC`, `anon`, and
+`authenticated` privileges without creating policies or changing application
+rows. It also secures defaults for objects later created by the migration role;
+apply it as every role that will create application objects. Supabase's `service_role` has
 the PostgreSQL `BYPASSRLS` attribute and remains the backend access path. Do
 not run either SQL file from this repository against a project until it has
 been reviewed for that project.
