@@ -59,7 +59,44 @@ For a real hosted version:
 4. Convert Express routes to Vercel serverless API routes or host the Express backend on Render, Railway, Fly.io, or a VPS.
 5. Deploy the frontend on Vercel.
 
-## Phase 2: single-owner authentication
+## Phase 3A: database denial and single-owner authentication
+
+> **STOP:** Do not configure or deploy `VITE_SUPABASE_URL` and
+> `VITE_SUPABASE_ANON_KEY` until the RLS/privilege migration has been
+> successfully applied and verified.
+
+The browser uses Supabase only to authenticate. All application-data access
+must pass through the Express API, which uses the server-only service-role key.
+Repository inspection found four Supabase application tables: `students`,
+`payments`, `archived_students`, and `archived_payments`. No Supabase views,
+RPC functions, or explicitly named sequences are used by the application. The
+migration also revokes access inherited through `PUBLIC`, including sequences
+owned by those tables, views that directly depend on them, and any user-defined
+function in the `public` schema if such objects exist in the deployed schema.
+Secure default privileges cover future tables/views, sequences, and functions
+created by the role that applies the migration.
+
+### Mandatory deployment order
+
+1. Merge the reviewed code.
+2. Apply `supabase/migrations/20260903000100_deny_direct_application_data_access.sql` in the Supabase SQL Editor. Run it as a project administrator; do not edit it to add credentials.
+3. Run `supabase/verification/phase_3a_verify_data_api_denied.sql` in the SQL Editor. It reads PostgreSQL metadata only, not student records.
+4. Confirm every required table is present; both RLS columns are `true`; every table, sequence, view, function, and default-privilege result reports effective browser privileges absent; and the policy query returns zero rows. Effective checks include access inherited through `PUBLIC`. Optionally test Data API table requests with anon and ordinary authenticated credentials and confirm they cannot read or write rows; never include record contents in test output.
+5. Disable public Supabase sign-up.
+6. Create the single owner.
+7. Configure the Vercel environment variables described below.
+8. Redeploy and test missing, expired, non-owner, and owner authentication flows.
+
+The migration is transactional and repeatable. It validates the required
+tables, enables and forces RLS, and revokes `PUBLIC`, `anon`, and
+`authenticated` privileges without creating policies or changing application
+rows. It also secures defaults for objects later created by the migration role;
+apply it as every role that will create application objects. Supabase's `service_role` has
+the PostgreSQL `BYPASSRLS` attribute and remains the backend access path. Do
+not run either SQL file from this repository against a project until it has
+been reviewed for that project.
+
+### Single-owner setup
 
 The dashboard and every data API require a verified Supabase email/password session whose user UUID exactly matches `OWNER_USER_ID`. There is no registration UI. Keep public sign-up disabled in Supabase.
 
@@ -72,10 +109,23 @@ The dashboard and every data API require a verified Supabase email/password sess
 
 ### Local variables
 
-Copy `.env.example` to `.env` and fill it locally. The browser variables are `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Server configuration is `SUPABASE_URL`; server-only secrets are `SUPABASE_SERVICE_ROLE_KEY`, `OWNER_USER_ID`, `AADHAAR_HMAC_SECRET`, and `AADHAAR_ENCRYPTION_KEY`. Never prefix a server secret with `VITE_` and never commit `.env`.
+Copy `.env.example` to `.env` and fill it locally only after database denial is
+verified. The browser variables are `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_ANON_KEY`. Server configuration is `SUPABASE_URL`; server-only
+secrets currently required are `SUPABASE_SERVICE_ROLE_KEY` and
+`OWNER_USER_ID`. `AADHAAR_HMAC_SECRET` and `AADHAAR_ENCRYPTION_KEY` are reserved
+for the later Aadhaar-protection phase and are **not required yet**. Never
+prefix a server secret with `VITE_` and never commit `.env`.
 
 ### Vercel variables
 
-In **Project Settings → Environment Variables**, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for the Vite build. Add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `OWNER_USER_ID`, `AADHAAR_HMAC_SECRET`, and `AADHAAR_ENCRYPTION_KEY` for server functions. Select the intended Preview/Production environments, save, and redeploy. Values must come from the matching Supabase project; do not expose or log them.
+In **Project Settings → Environment Variables**, add `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_ANON_KEY` for the Vite build. Add `SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY`, and `OWNER_USER_ID` for server functions. Select
+the intended Preview/Production environments, save, and redeploy. Values must
+come from the matching Supabase project; do not expose or log them.
 
-The anon key and URL are public browser configuration. The service-role key, owner UUID, and Aadhaar secrets are server-only. Authentication protects application access but does not replace the future RLS, storage, Aadhaar cryptography, or rate-limiting phases.
+The anon key and URL are public browser configuration. The service-role key,
+owner UUID, and future Aadhaar secrets are server-only. Phase 3A RLS and
+privilege denial is mandatory defense in depth; later storage, Aadhaar
+cryptography, and rate-limiting phases remain separate work.

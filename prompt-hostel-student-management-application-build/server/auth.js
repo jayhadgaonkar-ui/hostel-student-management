@@ -21,3 +21,7 @@ export function createOwnerAuth({ authClient, ownerUserId } = {}) {
     }
   };
 }
+
+export function ownerSession(_, res) {
+  return res.json({ authenticated: true });
+}
